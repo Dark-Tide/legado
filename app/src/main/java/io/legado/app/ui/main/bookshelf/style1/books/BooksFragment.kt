@@ -151,18 +151,13 @@ class BooksFragment() : BaseFragment(R.layout.fragment_books),
                     2 -> list.sortedWith { o1, o2 ->
                         o1.name.cnCompare(o2.name)
                     }
-
                     3 -> list.sortedBy { it.order }
-
-                    // 综合排序 issue #3192
                     4 -> list.sortedByDescending {
                         max(it.latestChapterTime, it.durChapterTime)
                     }
-                    // 按作者排序
                     5 -> list.sortedWith { o1, o2 ->
                         o1.author.cnCompare(o2.author)
                     }
-
                     else -> list.sortedByDescending { it.durChapterTime }
                 }
             }.flowWithLifecycleAndDatabaseChangeFirst(
@@ -174,21 +169,22 @@ class BooksFragment() : BaseFragment(R.layout.fragment_books),
             }.conflate().flowOn(Dispatchers.Default).collect { list ->
                 binding.tvEmptyMsg.isGone = list.isNotEmpty()
                 binding.refreshLayout.isEnabled = enableRefresh && list.isNotEmpty()
-                
+
                 // 智能滚动逻辑
                 val layoutManager = binding.rvBookshelf.layoutManager as? LinearLayoutManager
                 val firstVisiblePosition = layoutManager?.findFirstVisibleItemPosition() ?: 0
                 val oldFirstBookUrl = booksAdapter.getItem(0)?.bookUrl
+
+                booksAdapter.setItems(list)
                 
-                booksAdapter.setItems(list) {
+                // 延迟执行滚动，确保 DiffUtil 完成计算
+                binding.rvBookshelf.post {
                     val newFirstBookUrl = booksAdapter.getItem(0)?.bookUrl
-                    
-                    // 用户在顶部区域 且 顶部书籍变化了 -> 滚动到新的顶部
                     if (firstVisiblePosition <= 2 && oldFirstBookUrl != newFirstBookUrl) {
                         layoutManager?.scrollToPositionWithOffset(0, 0)
                     }
                 }
-                
+
                 delay(100)
             }
         }
@@ -227,9 +223,6 @@ class BooksFragment() : BaseFragment(R.layout.fragment_books),
 
     override fun onDestroyView() {
         super.onDestroyView()
-        /**
-         * 将 RecyclerView 中的视图全部回收到 RecycledViewPool 中
-         */
         binding.rvBookshelf.setItemViewCacheSize(0)
         binding.rvBookshelf.adapter = null
     }
