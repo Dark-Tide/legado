@@ -11,7 +11,6 @@ import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.LinearLayoutManager
-import androidx.recyclerview.widget.RecyclerView
 import androidx.recyclerview.widget.RecyclerView.Adapter.StateRestorationPolicy
 import io.legado.app.R
 import io.legado.app.base.BaseFragment
@@ -112,23 +111,6 @@ class BooksFragment() : BaseFragment(R.layout.fragment_books),
         }
         booksAdapter.stateRestorationPolicy = StateRestorationPolicy.PREVENT_WHEN_EMPTY
         binding.rvBookshelf.adapter = booksAdapter
-        booksAdapter.registerAdapterDataObserver(object : RecyclerView.AdapterDataObserver() {
-            override fun onItemRangeInserted(positionStart: Int, itemCount: Int) {
-                val layoutManager = binding.rvBookshelf.layoutManager
-                if (positionStart == 0 && itemCount == 1 && layoutManager is LinearLayoutManager) {
-                    val scrollTo = layoutManager.findFirstVisibleItemPosition() - itemCount
-                    binding.rvBookshelf.scrollToPosition(max(0, scrollTo))
-                }
-            }
-
-            override fun onItemRangeMoved(fromPosition: Int, toPosition: Int, itemCount: Int) {
-                val layoutManager = binding.rvBookshelf.layoutManager
-                if (toPosition == 0 && itemCount == 1 && layoutManager is LinearLayoutManager) {
-                    val scrollTo = layoutManager.findFirstVisibleItemPosition() - itemCount
-                    binding.rvBookshelf.scrollToPosition(max(0, scrollTo))
-                }
-            }
-        })
         startLastUpdateTimeJob()
     }
 
@@ -192,7 +174,21 @@ class BooksFragment() : BaseFragment(R.layout.fragment_books),
             }.conflate().flowOn(Dispatchers.Default).collect { list ->
                 binding.tvEmptyMsg.isGone = list.isNotEmpty()
                 binding.refreshLayout.isEnabled = enableRefresh && list.isNotEmpty()
-                booksAdapter.setItems(list)
+                
+                // 智能滚动逻辑
+                val layoutManager = binding.rvBookshelf.layoutManager as? LinearLayoutManager
+                val firstVisiblePosition = layoutManager?.findFirstVisibleItemPosition() ?: 0
+                val oldFirstBookUrl = booksAdapter.getItem(0)?.bookUrl
+                
+                booksAdapter.setItems(list) {
+                    val newFirstBookUrl = booksAdapter.getItem(0)?.bookUrl
+                    
+                    // 用户在顶部区域 且 顶部书籍变化了 -> 滚动到新的顶部
+                    if (firstVisiblePosition <= 2 && oldFirstBookUrl != newFirstBookUrl) {
+                        layoutManager?.scrollToPositionWithOffset(0, 0)
+                    }
+                }
+                
                 delay(100)
             }
         }
